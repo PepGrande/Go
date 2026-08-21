@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Clients Normandie</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100vh;height:100dvh}
+body{font-family:-apple-system,sans-serif;background:#f2f5f9;display:flex;justify-content:center;margin:0;overflow:hidden}
+.app{max-width:480px;width:100%;background:white;display:flex;flex-direction:column;height:100vh;height:100dvh}
+.header{background:linear-gradient(135deg,#0a2a44,#1a5a8a);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.header h1{font-size:1rem}
+.badge{background:rgba(255,255,255,0.15);padding:2px 10px;border-radius:30px;font-size:0.6rem}
+.badge .count{background:rgba(255,255,255,0.2);padding:0 6px;border-radius:20px}
+.form-section{padding:10px 14px;background:#f8fafd;border-bottom:1px solid #e8edf4;flex-shrink:0}
+.form-section h2{font-size:0.8rem;color:#0b2a44;margin-bottom:8px}
+.form-group{margin-bottom:6px}
+.form-group label{font-size:0.7rem;color:#1e3a5f;display:block;margin-bottom:2px}
+.form-group input{width:100%;padding:8px 12px;border:1px solid #d8e2ee;border-radius:8px;font-size:0.8rem;background:white;outline:none}
+.btn-row{display:flex;gap:6px;margin-top:6px}
+.btn-add{flex:2;background:#1a73e8;color:white;border:none;padding:9px 0;border-radius:25px;font-weight:600;font-size:0.8rem;cursor:pointer}
+.btn-add:active{transform:scale(0.97)}
+.btn-optimize{flex:1;background:#1a73e8;color:white;border:none;padding:9px 0;border-radius:25px;font-weight:600;font-size:0.75rem;cursor:pointer}
+.btn-optimize:disabled{opacity:0.5;background:#e8edf4;color:#5a7a9a}
+.client-list{padding:8px 14px;flex:1;overflow-y:auto;min-height:0}
+.list-header{display:flex;justify-content:space-between;margin-bottom:6px}
+.list-header h3{font-size:0.75rem;color:#1e3a5f}
+.list-header .count{background:#1a73e8;color:white;border-radius:30px;padding:0 10px;font-size:0.6rem}
+.list-item{background:white;border-radius:10px;padding:7px 10px;margin-bottom:5px;border:1px solid #e8edf4;display:flex;justify-content:space-between;align-items:center}
+.client-name{font-weight:600;font-size:0.78rem}
+.client-detail{font-size:0.65rem;color:#5a7a9a}
+.client-detail a{color:#1a73e8;text-decoration:none;font-weight:600}
+.client-detail a:active{opacity:0.6}
+.no-geo{color:#b17a1a}
+.btn-delete{background:none;border:none;color:#bcc8d8;font-size:0.8rem;padding:4px 6px;cursor:pointer}
+.empty-message{color:#8aaac0;padding:10px 0;font-size:0.75rem;text-align:center}
+.footer{background:#f8fafd;padding:6px 14px;border-top:1px solid #e8edf4;font-size:0.6rem;color:#7a9aba;text-align:center;flex-shrink:0}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a3a5c;color:white;padding:8px 16px;border-radius:12px;font-size:0.7rem;display:none;z-index:9999}
+.toast.show{display:flex;animation:slideUp 0.3s ease}
+.toast.error{background:#b13a3a}
+.toast.success{background:#1a7a4a}
+.toast.warning{background:#b17a1a}
+@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header"><h1>📍 Clients</h1><div class="badge">Normandie <span class="count" id="clientCount">0</span></div></div>
+<div class="form-section">
+<h2>➕ Nouveau client</h2>
+<form id="clientForm">
+<div class="form-group"><label>Nom</label><input type="text" id="nom" list="nomSuggestions" placeholder="Jean Dupont" required autocomplete="off"><datalist id="nomSuggestions"></datalist></div>
+<div class="form-group"><label>Téléphone</label><input type="tel" id="telephone" placeholder="06 12 34 56 78"></div>
+<div class="form-group"><label>Adresse</label><input type="text" id="adresse" placeholder="15 rue de la République, 76600 Le Havre" required></div>
+<div class="btn-row">
+<button type="submit" class="btn-add">➕ Ajouter</button>
+<button type="button" id="optimizeBtn" class="btn-optimize" disabled>🔄 Tournée</button>
+</div>
+</form>
+</div>
+<div class="client-list">
+<div class="list-header"><h3>📋 Clients</h3><span class="count" id="listCount">0</span></div>
+<div id="clientListContainer"><div class="empty-message">Aucun client</div></div>
+</div>
+<div class="footer">🏪 Départ : Market Notre-Dame-de-Gravenchon</div>
+</div>
+<div id="toast" class="toast"><span id="toastMessage">Client ajouté !</span></div>
+
+<script>
+const STORAGE_KEY='clients_normandie';
+const DIRECTORY_KEY='clients_directory';
+let clients=[],id=0;
+const form=document.getElementById('clientForm'),nom=document.getElementById('nom'),tel=document.getElementById('telephone'),adr=document.getElementById('adresse'),listC=document.getElementById('clientListContainer'),listCount=document.getElementById('listCount'),clientCount=document.getElementById('clientCount'),optBtn=document.getElementById('optimizeBtn'),toast=document.getElementById('toast'),toastMsg=document.getElementById('toastMessage'),suggestions=document.getElementById('nomSuggestions');
+
+function showToast(m,t='success'){toast.className='toast show '+t;toastMsg.textContent=m;clearTimeout(toast._timer);toast._timer=setTimeout(()=>toast.classList.remove('show'),3500);}
+
+function saveClients(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(clients));}catch(e){showToast('⚠️ Sauvegarde impossible','warning');}}
+
+function loadClients(){try{const raw=localStorage.getItem(STORAGE_KEY);if(raw){clients=JSON.parse(raw);id=clients.reduce((m,c)=>Math.max(m,c.id),0);}}catch(e){clients=[];}}
+
+function loadDirectory(){try{const raw=localStorage.getItem(DIRECTORY_KEY);return raw?JSON.parse(raw):[];}catch(e){return [];}}
+
+function saveDirectory(dir){try{localStorage.setItem(DIRECTORY_KEY,JSON.stringify(dir));}catch(e){}}
+
+function refreshSuggestions(){
+  const dir=loadDirectory();
+  suggestions.innerHTML=dir.map(d=>`<option value="${d.nom}"></option>`).join('');
+}
+
+function findInDirectory(n){
+  const dir=loadDirectory();
+  return dir.find(d=>d.nom.toLowerCase()===n.toLowerCase());
+}
+
+function upsertDirectory(client){
+  const dir=loadDirectory();
+  const idx=dir.findIndex(d=>d.nom.toLowerCase()===client.nom.toLowerCase());
+  const entry={nom:client.nom,telephone:client.telephone,adresse:client.adresse,lat:client.lat,lng:client.lng};
+  if(idx>=0)dir[idx]=entry;else dir.push(entry);
+  saveDirectory(dir);
+  refreshSuggestions();
+}
+
+nom.addEventListener('input',function(){
+  const match=findInDirectory(nom.value.trim());
+  if(match && !tel.value && !adr.value){
+    tel.value=match.telephone||'';
+    adr.value=match.adresse||'';
+    showToast(`📇 ${match.nom} retrouvé dans le carnet`,'success');
+  }
+});
+
+function telLink(t){if(!t)return '';const digits=t.replace(/[^\d+]/g,'');return `<a href="tel:${digits}">${t}</a>`;}
+
+function render(){
+  const c=clients.length;
+  listCount.textContent=c;clientCount.textContent=c;
+  optBtn.disabled=c<1;
+  if(!c){listC.innerHTML='<div class="empty-message">Aucun client</div>';return;}
+  let h='';
+  clients.forEach(cl=>{
+    const geoWarn = (!cl.lat||!cl.lng) ? ' <span class="no-geo">⚠️ non localisé</span>' : '';
+    h+=`<div class="list-item"><div><div class="client-name">${cl.nom}</div><div class="client-detail">${telLink(cl.telephone)}</div><div class="client-detail">${cl.adresse}${geoWarn}</div></div><button class="btn-delete" onclick="deleteClient(${cl.id})">✕</button></div>`;
+  });
+  listC.innerHTML=h;
+}
+
+function deleteClient(delId){clients=clients.filter(c=>c.id!==delId);saveClients();render();showToast('Client supprimé','success');}
+
+function addClient(n,t,a,lat,lng){const c={id:++id,nom:n.trim(),telephone:t.trim()||'',adresse:a.trim()||'',lat:lat||null,lng:lng||null};clients.push(c);saveClients();upsertDirectory(c);render();return c;}
+
+function geocode(a){return fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(a)}&limit=1&accept-language=fr&countrycodes=fr`).then(r=>r.json()).then(d=>{if(d&&d.length>0){const lat=parseFloat(d[0].lat),lng=parseFloat(d[0].lon);if(!isNaN(lat)&&!isNaN(lng))return {lat,lng};}throw new Error('Adresse non trouvée');});}
+
+form.onsubmit=function(e){
+  e.preventDefault();
+  const n=nom.value.trim(),t=tel.value.trim(),a=adr.value.trim();
+  if(!n||!a){showToast('Remplissez nom et adresse','error');return;}
+  const btn=form.querySelector('.btn-add');
+
+  const known=findInDirectory(n);
+  if(known && known.adresse.trim().toLowerCase()===a.toLowerCase() && known.lat && known.lng){
+    addClient(n,t,a,known.lat,known.lng);
+    showToast(`✅ ${n} ajouté (carnet)`,'success');
+    form.reset();
+    return;
+  }
+
+  btn.disabled=true;btn.textContent='⏳';
+  geocode(a).then(c=>{
+    addClient(n,t,a,c.lat,c.lng);
+    showToast(`✅ ${n} localisé`,'success');
+    form.reset();
+  }).catch(()=>{
+    if(confirm(`⚠️ Adresse "${a}" non trouvée.\nAjouter sans localisation ?`)){
+      addClient(n,t,a,null,null);
+      showToast(`⚠️ ${n} ajouté sans localisation`,'warning');
+      form.reset();
+    }else{
+      showToast('❌ Annulé','error');
+    }
+  }).finally(()=>{btn.disabled=false;btn.textContent='➕ Ajouter';});
+};
+
+optBtn.onclick=function(){
+  if(clients.length<1){showToast('Ajoutez des clients','warning');return;}
+  window.location.href='tournee.html';
+};
+
+loadClients();
+refreshSuggestions();
+render();
+</script>
+</body>
+</html>
